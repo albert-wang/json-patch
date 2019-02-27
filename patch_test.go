@@ -224,6 +224,30 @@ var Cases = []Case{
 		   { "op": "copy", "path": "/foo/-", "from": "/foo/1" }]`,
 		fmt.Sprintf(`{ "foo": ["A", %q, %q, %q] }`, repeatedA(48), repeatedA(48), repeatedA(48)),
 	},
+	// Remove value removes all values form aray
+	{
+		`{ "foo": [ "all", "cows", "eat", "grass" ] }`,
+		`[ { "op": "remove_value", "from": "/foo", "value": "cows" } ]`,
+		`{ "foo": [ "all", "eat", "grass" ] }`,
+	},
+	// Removes duplicates
+	{
+		`{ "foo": [ "all", "cows", "cows", "cows", "eat", "grass", "cows"] }`,
+		`[ { "op": "remove_value", "from": "/foo", "value": "cows" } ]`,
+		`{ "foo": [ "all", "eat", "grass" ] }`,
+	},
+	// Works on empty arrays
+	{
+		`{ "foo": [] }`,
+		`[ { "op": "remove_value", "from": "/foo", "value": "cows" } ]`,
+		`{ "foo": [] }`,
+	},
+	// Also works on objects
+	{
+		`{ "foo": { "a": 1, "b": 2 }`,
+		`[ { "op": "remove_value", "from": "/foo", "value": 2 } ]`,
+		`{ "foo": { "a": 1 }`,
+	},
 }
 
 type BadCase struct {

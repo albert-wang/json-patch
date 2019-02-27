@@ -3,19 +3,20 @@
 [RFC6902 JSON patches](http://tools.ietf.org/html/rfc6902) against documents, as
 well as for calculating & applying [RFC7396 JSON merge patches](https://tools.ietf.org/html/rfc7396).
 
-[![GoDoc](https://godoc.org/github.com/evanphx/json-patch?status.svg)](http://godoc.org/github.com/evanphx/json-patch)
-[![Build Status](https://travis-ci.org/evanphx/json-patch.svg?branch=master)](https://travis-ci.org/evanphx/json-patch)
-[![Report Card](https://goreportcard.com/badge/github.com/evanphx/json-patch)](https://goreportcard.com/report/github.com/evanphx/json-patch)
+This repository differs from the one under evanphx by adding support for a custom 'remove_value' operation
+in JSON patches. This does not follow the RFS6902 specification. The `remove_value` operation takes in a
+path pointing to either an object or array, and a value object, and will remove from the object or array
+all values that compare equal to the provided value.
 
 # Get It!
 
-**Latest and greatest**: 
+**Latest and greatest**:
 ```bash
-go get -u github.com/evanphx/json-patch
+go get -u github.com/albert-wang/json-patch
 ```
 
 **Stable Versions**:
-* Version 4: `go get -u gopkg.in/evanphx/json-patch.v4`
+* Version 4: `go get -u gopkg.in/albert-wang/json-patch.v4`
 
 (previous versions below `v3` are unavailable)
 
@@ -40,9 +41,9 @@ go get -u github.com/evanphx/json-patch
 
 ## Create and apply a merge patch
 Given both an original JSON document and a modified JSON document, you can create
-a [Merge Patch](https://tools.ietf.org/html/rfc7396) document. 
+a [Merge Patch](https://tools.ietf.org/html/rfc7396) document.
 
-It can describe the changes needed to convert from the original to the 
+It can describe the changes needed to convert from the original to the
 modified JSON document.
 
 Once you have a merge patch, you can apply it to other JSON documents using the
@@ -54,7 +55,7 @@ package main
 import (
 	"fmt"
 
-	jsonpatch "github.com/evanphx/json-patch"
+	jsonpatch "github.com/albert-wang/json-patch"
 )
 
 func main() {
@@ -86,7 +87,7 @@ updated tina doc: {"age":28,"name":"Jane"}
 ```
 
 ## Create and apply a JSON Patch
-You can create patch objects using `DecodePatch([]byte)`, which can then 
+You can create patch objects using `DecodePatch([]byte)`, which can then
 be applied against JSON documents.
 
 The following is an example of creating a patch from two operations, and
@@ -98,7 +99,7 @@ package main
 import (
 	"fmt"
 
-	jsonpatch "github.com/evanphx/json-patch"
+	jsonpatch "github.com/albert-wang/json-patch"
 )
 
 func main() {
@@ -133,9 +134,9 @@ Modified document: {"age":24,"name":"Jane"}
 
 ## Comparing JSON documents
 Due to potential whitespace and ordering differences, one cannot simply compare
-JSON strings or byte-arrays directly. 
+JSON strings or byte-arrays directly.
 
-As such, you can instead use `jsonpatch.Equal(document1, document2)` to 
+As such, you can instead use `jsonpatch.Equal(document1, document2)` to
 determine if two JSON documents are _structurally_ equal. This ignores
 whitespace differences, and key-value ordering.
 
@@ -145,7 +146,7 @@ package main
 import (
 	"fmt"
 
-	jsonpatch "github.com/evanphx/json-patch"
+	jsonpatch "github.com/albert-wang/json-patch"
 )
 
 func main() {
@@ -177,12 +178,12 @@ $ go run main.go
 ```
 
 ## Combine merge patches
-Given two JSON merge patch documents, it is possible to combine them into a 
+Given two JSON merge patch documents, it is possible to combine them into a
 single merge patch which can describe both set of changes.
 
 The resulting merge patch can be used such that applying it results in a
 document structurally similar as merging each merge patch to the document
-in succession. 
+in succession.
 
 ```go
 package main
@@ -190,7 +191,7 @@ package main
 import (
 	"fmt"
 
-	jsonpatch "github.com/evanphx/json-patch"
+	jsonpatch "github.com/albert-wang/json-patch"
 )
 
 func main() {
@@ -242,8 +243,8 @@ combined merge patch: {"age":4.23,"eyes":"blue","height":null,"name":"Jane"}
 # CLI for comparing JSON documents
 You can install the commandline program `json-patch`.
 
-This program can take multiple JSON patch documents as arguments, 
-and fed a JSON document from `stdin`. It will apply the patch(es) against 
+This program can take multiple JSON patch documents as arguments,
+and fed a JSON document from `stdin`. It will apply the patch(es) against
 the document and output the modified doc.
 
 **patch.1.json**
@@ -274,24 +275,7 @@ the document and output the modified doc.
 You can then run:
 
 ```bash
-$ go install github.com/evanphx/json-patch/cmd/json-patch
+$ go install github.com/albert-wang/json-patch/cmd/json-patch
 $ cat document.json | json-patch -p patch.1.json -p patch.2.json
 {"address":"123 Main St","age":"21","name":"Jane"}
 ```
-
-# Help It!
-Contributions are welcomed! Leave [an issue](https://github.com/evanphx/json-patch/issues)
-or [create a PR](https://github.com/evanphx/json-patch/compare).
-
-
-Before creating a pull request, we'd ask that you make sure tests are passing
-and that you have added new tests when applicable.
-
-Contributors can run tests using:
-
-```bash
-go test -cover ./...
-```
-
-Builds for pull requests are tested automatically 
-using [TravisCI](https://travis-ci.org/evanphx/json-patch).

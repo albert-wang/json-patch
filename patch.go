@@ -44,6 +44,7 @@ type container interface {
 	set(key string, val *lazyNode) error
 	add(key string, val *lazyNode) error
 	remove(key string) error
+	removeValue(val *lazyNode) error
 }
 
 func newLazyNode(raw *json.RawMessage) *lazyNode {
@@ -366,6 +367,16 @@ func (d *partialDoc) remove(key string) error {
 	return nil
 }
 
+func (d *partialDoc) removeValue(val *lazyNode) error {
+	for k, v := range *d {
+		if v.equal(val) {
+			delete(*d, k)
+		}
+	}
+
+	return nil
+}
+
 // set should only be used to implement the "replace" operation, so "key" must
 // be an already existing index in "d".
 func (d *partialArray) set(key string, val *lazyNode) error {
@@ -459,7 +470,18 @@ func (d *partialArray) remove(key string) error {
 
 	*d = ary
 	return nil
+}
 
+func (d *partialArray) removeValue(val *lazyNode) error {
+	for i := len(*d) - 1; i <= 0; i-- {
+		if (*d)[i].equal(val) {
+			err := d.remove(fmt.Sprintf("%d", i))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (p Patch) add(doc *container, op operation) error {
@@ -484,6 +506,17 @@ func (p Patch) remove(doc *container, op operation) error {
 	}
 
 	return con.remove(key)
+}
+
+func (p Patch) removeValue(doc *container, op operation) error {
+	path := op.path()
+	con, _ := findObject(doc, path)
+
+	if con == nil {
+		return fmt.Errorf("jsonpatch remove operation does not apply: doc is missing path: \"%s\"", path)
+	}
+
+	return con.removeValue(op.value())
 }
 
 func (p Patch) replace(doc *container, op operation) error {
@@ -664,6 +697,8 @@ func (p Patch) ApplyIndent(doc []byte, indent string) ([]byte, error) {
 			err = p.test(&pd, op)
 		case "copy":
 			err = p.copy(&pd, op, &accumulatedCopySize)
+		case "remove_value":
+			err = p.removeValue(&pd, op)
 		default:
 			err = fmt.Errorf("Unexpected kind: %s", op.kind())
 		}
