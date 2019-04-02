@@ -256,7 +256,6 @@ func (o operation) path() string {
 
 		return op
 	}
-
 	return "unknown"
 }
 
@@ -302,7 +301,7 @@ Loop:
 	return false
 }
 
-func findObject(pd *container, path string) (container, string) {
+func findObject(pd *container, path string, createIntermediates bool) (container, string) {
 	doc := *pd
 
 	split := strings.Split(path, "/")
@@ -312,25 +311,55 @@ func findObject(pd *container, path string) (container, string) {
 	}
 
 	parts := split[1 : len(split)-1]
-
 	key := split[len(split)-1]
 
 	var err error
-
-	for _, part := range parts {
+	for i, part := range parts {
+		nextKey := key
+		if i < len(parts)-1 {
+			nextKey = parts[i+1]
+		}
 
 		next, ok := doc.get(decodePatchKey(part))
-
 		if next == nil || ok != nil {
-			return nil, ""
+			if createIntermediates {
+				_, err := strconv.Atoi(nextKey)
+				if err != nil && nextKey != "-" {
+					rawmsg := json.RawMessage([]byte("{}"))
+					doc.add(decodePatchKey(part), newLazyNode(&rawmsg))
+				} else {
+					rawmsg := json.RawMessage([]byte("[]"))
+					doc.add(decodePatchKey(part), newLazyNode(&rawmsg))
+				}
+
+				next, ok = doc.get(decodePatchKey(part))
+			}
+
+			if next == nil || ok != nil {
+				return nil, ""
+			}
 		}
 
 		if isArray(*next.raw) {
-			doc, err = next.intoAry()
+			arr, err := next.intoAry()
+			if nextKey != "-" && createIntermediates {
+				idx, err := strconv.Atoi(nextKey)
+				if err == nil {
+					raw := []*lazyNode(*arr)
+					for len(raw) < idx {
+						rawmsg := json.RawMessage([]byte("null"))
+						nullNode := newLazyNode(&rawmsg)
+						// Expand the array with empty.
+						raw = append(raw, nullNode)
+					}
+					*arr = raw
+				}
+			}
 
 			if err != nil {
 				return nil, ""
 			}
+			doc = arr
 		} else {
 			doc, err = next.intoDoc()
 
@@ -473,7 +502,7 @@ func (d *partialArray) remove(key string) error {
 }
 
 func (d *partialArray) removeValue(val *lazyNode) error {
-	for i := len(*d) - 1; i <= 0; i-- {
+	for i := len(*d) - 1; i >= 0; i-- {
 		if (*d)[i].equal(val) {
 			err := d.remove(fmt.Sprintf("%d", i))
 			if err != nil {
@@ -487,7 +516,8 @@ func (d *partialArray) removeValue(val *lazyNode) error {
 func (p Patch) add(doc *container, op operation) error {
 	path := op.path()
 
-	con, key := findObject(doc, path)
+	intermediates := op.kind() == "add_intermediates"
+	con, key := findObject(doc, path, intermediates)
 
 	if con == nil {
 		return fmt.Errorf("jsonpatch add operation does not apply: doc is missing path: \"%s\"", path)
@@ -499,7 +529,7 @@ func (p Patch) add(doc *container, op operation) error {
 func (p Patch) remove(doc *container, op operation) error {
 	path := op.path()
 
-	con, key := findObject(doc, path)
+	con, key := findObject(doc, path, false)
 
 	if con == nil {
 		return fmt.Errorf("jsonpatch remove operation does not apply: doc is missing path: \"%s\"", path)
@@ -510,19 +540,30 @@ func (p Patch) remove(doc *container, op operation) error {
 
 func (p Patch) removeValue(doc *container, op operation) error {
 	path := op.path()
-	con, _ := findObject(doc, path)
+	con, key := findObject(doc, path, false)
 
 	if con == nil {
 		return fmt.Errorf("jsonpatch remove operation does not apply: doc is missing path: \"%s\"", path)
 	}
 
-	return con.removeValue(op.value())
+	next, ok := con.get(key)
+	if next != nil && ok == nil {
+		if isArray(*next.raw) {
+			arr, _ := next.intoAry()
+			arr.removeValue(op.value())
+		} else {
+			doc, _ := next.intoDoc()
+			doc.removeValue(op.value())
+		}
+	}
+
+	return nil
 }
 
 func (p Patch) replace(doc *container, op operation) error {
 	path := op.path()
 
-	con, key := findObject(doc, path)
+	con, key := findObject(doc, path, false)
 
 	if con == nil {
 		return fmt.Errorf("jsonpatch replace operation does not apply: doc is missing path: %s", path)
@@ -539,7 +580,7 @@ func (p Patch) replace(doc *container, op operation) error {
 func (p Patch) move(doc *container, op operation) error {
 	from := op.from()
 
-	con, key := findObject(doc, from)
+	con, key := findObject(doc, from, false)
 
 	if con == nil {
 		return fmt.Errorf("jsonpatch move operation does not apply: doc is missing from path: %s", from)
@@ -557,7 +598,7 @@ func (p Patch) move(doc *container, op operation) error {
 
 	path := op.path()
 
-	con, key = findObject(doc, path)
+	con, key = findObject(doc, path, false)
 
 	if con == nil {
 		return fmt.Errorf("jsonpatch move operation does not apply: doc is missing destination path: %s", path)
@@ -569,7 +610,7 @@ func (p Patch) move(doc *container, op operation) error {
 func (p Patch) test(doc *container, op operation) error {
 	path := op.path()
 
-	con, key := findObject(doc, path)
+	con, key := findObject(doc, path, false)
 
 	if con == nil {
 		return fmt.Errorf("jsonpatch test operation does not apply: is missing path: %s", path)
@@ -600,7 +641,7 @@ func (p Patch) test(doc *container, op operation) error {
 func (p Patch) copy(doc *container, op operation, accumulatedCopySize *int64) error {
 	from := op.from()
 
-	con, key := findObject(doc, from)
+	con, key := findObject(doc, from, false)
 
 	if con == nil {
 		return fmt.Errorf("jsonpatch copy operation does not apply: doc is missing from path: %s", from)
@@ -613,7 +654,7 @@ func (p Patch) copy(doc *container, op operation, accumulatedCopySize *int64) er
 
 	path := op.path()
 
-	con, key = findObject(doc, path)
+	con, key = findObject(doc, path, false)
 
 	if con == nil {
 		return fmt.Errorf("jsonpatch copy operation does not apply: doc is missing destination path: %s", path)
@@ -686,6 +727,8 @@ func (p Patch) ApplyIndent(doc []byte, indent string) ([]byte, error) {
 	for _, op := range p {
 		switch op.kind() {
 		case "add":
+			err = p.add(&pd, op)
+		case "add_intermediates":
 			err = p.add(&pd, op)
 		case "remove":
 			err = p.remove(&pd, op)

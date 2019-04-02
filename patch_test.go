@@ -59,25 +59,25 @@ var Cases = []Case{
 	{
 		`{ "foo": "bar"}`,
 		`[
-         { "op": "add", "path": "/baz", "value": "qux" }
-     ]`,
+		         { "op": "add", "path": "/baz", "value": "qux" }
+		     ]`,
 		`{
-       "baz": "qux",
-       "foo": "bar"
-     }`,
+		       "baz": "qux",
+		       "foo": "bar"
+		     }`,
 	},
 	{
 		`{ "foo": [ "bar", "baz" ] }`,
 		`[
-     { "op": "add", "path": "/foo/1", "value": "qux" }
-    ]`,
+		     { "op": "add", "path": "/foo/1", "value": "qux" }
+		    ]`,
 		`{ "foo": [ "bar", "qux", "baz" ] }`,
 	},
 	{
 		`{ "foo": [ "bar", "baz" ] }`,
 		`[
-     { "op": "add", "path": "/foo/-1", "value": "qux" }
-    ]`,
+		     { "op": "add", "path": "/foo/-1", "value": "qux" }
+		    ]`,
 		`{ "foo": [ "bar", "baz", "qux" ] }`,
 	},
 	{
@@ -97,24 +97,24 @@ var Cases = []Case{
 	},
 	{
 		`{
-     "foo": {
-       "bar": "baz",
-       "waldo": "fred"
-     },
-     "qux": {
-       "corge": "grault"
-     }
-   }`,
+		     "foo": {
+		       "bar": "baz",
+		       "waldo": "fred"
+		     },
+		     "qux": {
+		       "corge": "grault"
+		     }
+		   }`,
 		`[ { "op": "move", "from": "/foo/waldo", "path": "/qux/thud" } ]`,
 		`{
-     "foo": {
-       "bar": "baz"
-     },
-     "qux": {
-       "corge": "grault",
-       "thud": "fred"
-     }
-   }`,
+		     "foo": {
+		       "bar": "baz"
+		     },
+		     "qux": {
+		       "corge": "grault",
+		       "thud": "fred"
+		     }
+		   }`,
 	},
 	{
 		`{ "foo": [ "all", "grass", "cows", "eat" ] }`,
@@ -221,32 +221,51 @@ var Cases = []Case{
 		// The wrapping quotes around 'A's are included in the copy
 		// size, so each copy operation increases the size by 50 bytes.
 		`[ { "op": "copy", "path": "/foo/-", "from": "/foo/1" },
-		   { "op": "copy", "path": "/foo/-", "from": "/foo/1" }]`,
+				   { "op": "copy", "path": "/foo/-", "from": "/foo/1" }]`,
 		fmt.Sprintf(`{ "foo": ["A", %q, %q, %q] }`, repeatedA(48), repeatedA(48), repeatedA(48)),
 	},
 	// Remove value removes all values form aray
 	{
 		`{ "foo": [ "all", "cows", "eat", "grass" ] }`,
-		`[ { "op": "remove_value", "from": "/foo", "value": "cows" } ]`,
+		`[ { "op": "remove_value", "path": "/foo", "value": "cows" } ]`,
 		`{ "foo": [ "all", "eat", "grass" ] }`,
 	},
 	// Removes duplicates
 	{
 		`{ "foo": [ "all", "cows", "cows", "cows", "eat", "grass", "cows"] }`,
-		`[ { "op": "remove_value", "from": "/foo", "value": "cows" } ]`,
+		`[ { "op": "remove_value", "path": "/foo", "value": "cows" } ]`,
 		`{ "foo": [ "all", "eat", "grass" ] }`,
 	},
 	// Works on empty arrays
 	{
 		`{ "foo": [] }`,
-		`[ { "op": "remove_value", "from": "/foo", "value": "cows" } ]`,
+		`[ { "op": "remove_value", "path": "/foo", "value": "cows" } ]`,
 		`{ "foo": [] }`,
 	},
 	// Also works on objects
 	{
-		`{ "foo": { "a": 1, "b": 2 }`,
-		`[ { "op": "remove_value", "from": "/foo", "value": 2 } ]`,
-		`{ "foo": { "a": 1 }`,
+		`{ "foo": { "a": 1, "b": 2 } }`,
+		`[ { "op": "remove_value", "path": "/foo", "value": 2 } ]`,
+		`{ "foo": { "a": 1 } }`,
+	},
+
+	// add_intermediates
+	{
+		`{ "foo": { "a": 1, "b": 2 } }`,
+		`[ { "op": "add_intermediates", "path": "/foo/bar/baz/0/1/2", "value": 2 } ]`,
+		`{ "foo": { "a": 1, "b": 2, "bar": { "baz": [[null, [null, null, 2]]] } } }`,
+	},
+
+	{
+		`{ "foo": { "a": 1, "b": 2, "bar": { "x": 2} }}`,
+		`[ { "op": "add_intermediates", "path": "/foo/bar/y", "value": 2 } ]`,
+		`{ "foo": { "a": 1, "b": 2, "bar": { "x": 2, "y": 2 }}}`,
+	},
+
+	{
+		`{ "foo": { "a": 1, "b": 2 }}`,
+		`[ { "op": "add_intermediates", "path": "/foo/bar/-", "value": 2 } ]`,
+		`{ "foo": { "a": 1, "b": 2, "bar": [2]}}`,
 	},
 }
 
@@ -374,11 +393,13 @@ func TestAllCases(t *testing.T) {
 
 		if err != nil {
 			t.Errorf("Unable to apply patch: %s", err)
+			t.Errorf("patch: %s", c.patch)
 		}
 
 		if !compareJSON(out, c.result) {
 			t.Errorf("Patch did not apply. Expected:\n%s\n\nActual:\n%s",
 				reformatJSON(c.result), reformatJSON(out))
+			t.Errorf("patch: %s", c.patch)
 		}
 	}
 

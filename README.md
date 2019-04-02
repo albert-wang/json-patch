@@ -3,10 +3,16 @@
 [RFC6902 JSON patches](http://tools.ietf.org/html/rfc6902) against documents, as
 well as for calculating & applying [RFC7396 JSON merge patches](https://tools.ietf.org/html/rfc7396).
 
-This repository differs from the one under evanphx by adding support for a custom 'remove_value' operation
-in JSON patches. This does not follow the RFS6902 specification. The `remove_value` operation takes in a
-path pointing to either an object or array, and a value object, and will remove from the object or array
-all values that compare equal to the provided value.
+This repository differs from the one under evanphx by adding support for custom 'remove_value' and
+'add_intermediates' operations in JSON patches. This does not follow the RFS6902 specification.
+
+The `remove_value` operation takes in a path pointing to either an object or array, and a value object,
+and will remove from the object or array all values that compare equal to the provided value.
+
+The `add_intermediates` operation takes in a path and will attempt to set that value, creating empty
+objects and arrays until that path becomes valid. Indices into arrays that exceed the existing dimension
+are padded with nulls. An integer path part that does not exist in the object will create an array, other
+keys will create objects.
 
 # Get It!
 
